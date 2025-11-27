@@ -3,6 +3,7 @@ import { AppState, SlideData, TargetLanguage, ScriptStyle, ProcessingMode, UILan
 import { UploadZone } from './components/UploadZone';
 import { SlideEditor } from './components/SlideEditor';
 import { ApiKeyModal } from './components/ApiKeyModal';
+import { LandingPage } from './components/LandingPage';
 import { parsePPTXFile, embedScriptsAndExportPPTX } from './utils/pptxHelper';
 import { convertPdfToImages } from './utils/pdfHelper';
 import { initializeGemini, generateSlideScript } from './services/geminiService';
@@ -21,7 +22,7 @@ import {
 
 const App: React.FC = () => {
   const [apiKey, setApiKey] = useState<string | null>(null);
-  const [appState, setAppState] = useState<AppState>(AppState.UPLOAD);
+  const [appState, setAppState] = useState<AppState>(AppState.LANDING);
   const [slides, setSlides] = useState<SlideData[]>([]);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -232,8 +233,31 @@ ${s.generatedScript}
     setUiLanguage(prev => prev === 'English' ? 'Chinese' : 'English');
   };
 
+  const handleStart = () => {
+    setAppState(AppState.UPLOAD);
+  };
+
   if (!apiKey) {
     return <ApiKeyModal onSubmit={handleApiKeySubmit} uiLanguage={uiLanguage} />;
+  }
+
+  // --- Render Landing Page if State is LANDING ---
+  if (appState === AppState.LANDING) {
+    return (
+      <div className="relative">
+         {/* Language Toggle on Landing Page */}
+         <div className="absolute top-6 right-8 z-50">
+            <button
+              onClick={toggleLanguage}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/80 backdrop-blur text-slate-300 hover:bg-slate-700 transition-colors border border-slate-700 text-sm font-medium"
+            >
+              <Languages className="w-4 h-4" />
+              <span>{uiLanguage === 'English' ? '中文' : 'EN'}</span>
+            </button>
+         </div>
+         <LandingPage onStart={handleStart} uiLanguage={uiLanguage} />
+      </div>
+    );
   }
 
   return (
@@ -241,10 +265,10 @@ ${s.generatedScript}
       {/* Header */}
       <header className="h-16 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md flex items-center justify-between px-8 fixed w-full z-40">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center cursor-pointer" onClick={() => setAppState(AppState.LANDING)}>
             <Bot className="text-white w-5 h-5" />
           </div>
-          <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-400">
+          <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-400 cursor-pointer" onClick={() => setAppState(AppState.LANDING)}>
             {t.appTitle}
           </h1>
         </div>

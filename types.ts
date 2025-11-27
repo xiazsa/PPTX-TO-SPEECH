@@ -14,6 +14,7 @@ export interface ProcessingStats {
 }
 
 export enum AppState {
+  LANDING = 'LANDING',
   UPLOAD = 'UPLOAD',
   EDITOR = 'EDITOR',
   EXPORT = 'EXPORT'

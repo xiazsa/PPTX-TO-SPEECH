@@ -10,6 +10,27 @@ export const TRANSLATIONS = {
       submit: "Start Session",
       link: "Get an API Key"
     },
+    landing: {
+      heroTitle: "Turn Slides into Speeches",
+      heroTitleGradient: "Instantly.",
+      heroDesc: "The intelligent assistant that analyzes your PowerPoint visually and textually to generate professional speaker notes in seconds. Powered by Google Gemini 2.5.",
+      startBtn: "Start Creating",
+      learnMore: "Learn How It Works",
+      features: {
+        visual: {
+          title: "Vision Analysis",
+          desc: "Understands charts, diagrams, and photos in your slides for context-aware scripts."
+        },
+        style: {
+          title: "Adaptive Tone",
+          desc: "Choose from Professional, Humorous, or Custom styles to match your audience."
+        },
+        export: {
+          title: "Native Export",
+          desc: "Injects generated notes directly back into your .pptx file automatically."
+        }
+      }
+    },
     header: {
       textOnly: "Text Only",
       exportPPTX: "Export PPTX",
@@ -81,6 +102,27 @@ export const TRANSLATIONS = {
       placeholder: "AIzaSy...",
       submit: "开始会话",
       link: "获取 API 密钥"
+    },
+    landing: {
+      heroTitle: "让 PPT 自动开口说话",
+      heroTitleGradient: "瞬间完成",
+      heroDesc: "智能助手，深度分析幻灯片的视觉与文字内容，秒级生成专业演讲备注。由 Google Gemini 2.5 驱动。",
+      startBtn: "立即开始",
+      learnMore: "了解工作原理",
+      features: {
+        visual: {
+          title: "视觉感知",
+          desc: "能够理解图表、插图和照片，生成与画面紧密结合的讲稿内容。"
+        },
+        style: {
+          title: "多变风格",
+          desc: "提供专业、幽默或完全自定义的演讲风格，完美契合您的听众。"
+        },
+        export: {
+          title: "原生导出",
+          desc: "将生成的讲稿直接无缝写回 PPTX 文件的备注栏，一键下载。"
+        }
+      }
     },
     header: {
       textOnly: "纯文本下载",
