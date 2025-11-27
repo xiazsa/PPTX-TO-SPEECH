@@ -41,6 +41,7 @@ export const generateSlideScript = async (
   slideIndex: number,
   totalSlides: number,
   currentSlideContent: string[],
+  currentSlideImages: string[], // Base64 data strings
   previousScript: string | null,
   nextSlideContent: string[] | null,
   language: TargetLanguage = 'English',
@@ -51,16 +52,14 @@ export const generateSlideScript = async (
     throw new Error("Gemini API not initialized");
   }
 
-  // 1. Sanitize content
+  // 1. Sanitize text content
   const cleanContent = currentSlideContent
     .map(t => t.trim())
     .filter(t => t.length > 1);
 
-  // Allow generation even if empty to provide a bridge between slides, 
-  // but warn the AI it's an image-only or empty slide.
-  const contentContext = cleanContent.length > 0 
-    ? cleanContent.join("\n- ").slice(0, 10000)
-    : "(This slide contains mainly visuals or no extractable text. Focus on transitioning from the previous topic.)";
+  const textContext = cleanContent.length > 0 
+    ? cleanContent.join("\n- ").slice(0, 5000)
+    : "(No extractable text found. Rely on visual analysis.)";
 
   // 2. Prepare Contexts
   const prevContext = previousScript 
@@ -81,7 +80,7 @@ ${nextSlideContent.join(', ').slice(0, 500)}...
 
   const styleGuidelines = getStyleGuidelines(style, customPrompt);
 
-  const prompt = `
+  const systemInstruction = `
     You are an expert presentation speechwriter delivering a cohesive, single continuous speech.
     
     Current Progress: Slide ${slideIndex + 1} of ${totalSlides}.
@@ -91,8 +90,8 @@ ${nextSlideContent.join(', ').slice(0, 500)}...
     CONTEXT:
     ${prevContext}
     
-    CURRENT SLIDE DATA:
-    - ${contentContext}
+    CURRENT SLIDE TEXT DATA:
+    - ${textContext}
     
     ${nextContext}
 
@@ -100,18 +99,38 @@ ${nextSlideContent.join(', ').slice(0, 500)}...
     1. STRICTLY write the script in ${language}.
     2. **FLOW IS CRITICAL**: Do not treat this as an isolated slide. Connect it explicitly to what was just said in the "PREVIOUSLY SPOKEN" block.
     3. Use transitional phrases (e.g., "Building on that...", "Now let's look at...", "As we saw earlier...").
-    4. Expand on the bullet points provided in "CURRENT SLIDE DATA". Do not just read them aloud.
+    4. If images are provided, analyze them deeply. Describe charts, trends, or visual metaphors visible in the image to make the speech concrete.
     5. **STYLE INSTRUCTION**: ${styleGuidelines}
     6. Length: Approx 150-250 words.
     7. Return ONLY the raw script text. No titles, no markdown metadata.
   `;
 
+  // 3. Construct Payload
+  const parts: any[] = [];
+  
+  // Add images if available (limit to 3 to avoid payload issues)
+  currentSlideImages.slice(0, 3).forEach(base64Uri => {
+    // base64Uri is "data:image/png;base64,....."
+    const matches = base64Uri.match(/^data:(.+);base64,(.+)$/);
+    if (matches) {
+        parts.push({
+            inlineData: {
+                mimeType: matches[1],
+                data: matches[2]
+            }
+        });
+    }
+  });
+
+  // Add text prompt
+  parts.push({ text: systemInstruction });
+
   try {
-    // 3. Execute with retry logic
+    // 4. Execute with retry logic
     const responseText = await retry(async () => {
       const response = await genAIClient!.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
+        model: 'gemini-2.5-flash', // Supports multimodal
+        contents: { parts },
       });
       return response.text;
     });

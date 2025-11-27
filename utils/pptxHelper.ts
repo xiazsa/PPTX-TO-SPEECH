@@ -1,5 +1,5 @@
 import JSZip from 'jszip';
-import { SlideData, TargetLanguage } from '../types';
+import { SlideData, TargetLanguage, ProcessingMode } from '../types';
 
 // Map UI languages to ISO codes
 const LANG_MAP: Record<TargetLanguage, string> = {
@@ -64,10 +64,40 @@ const extractTextFromXML = (xmlContent: string): string[] => {
   return texts;
 };
 
-export const parsePPTXFile = async (file: File): Promise<string[][]> => {
+// Helper to convert array buffer to base64
+const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+};
+
+// Helper to get mime type from file extension
+const getMimeType = (filename: string): string => {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'png': return 'image/png';
+    case 'jpg': 
+    case 'jpeg': return 'image/jpeg';
+    case 'gif': return 'image/gif';
+    case 'webp': return 'image/webp';
+    default: return 'image/jpeg';
+  }
+};
+
+export interface ExtractedSlide {
+    text: string[];
+    images: string[];
+}
+
+export const parsePPTXFile = async (file: File, mode: ProcessingMode): Promise<ExtractedSlide[]> => {
   try {
     const zip = new JSZip();
     const zipped = await zip.loadAsync(file);
+    const parser = new DOMParser();
     
     const fileNames = Object.keys(zipped.files).filter(name => 
       name.startsWith('ppt/slides/slide') && name.endsWith('.xml')
@@ -79,18 +109,63 @@ export const parsePPTXFile = async (file: File): Promise<string[][]> => {
         return numA - numB;
     });
 
-    const slidesText: string[][] = [];
+    const slidesData: ExtractedSlide[] = [];
 
     for (const fileName of sortedFileNames) {
+      // 1. Text Extraction (Always do this as fallback or context)
       const content = await zipped.file(fileName)?.async('string');
+      let texts: string[] = [];
       if (content) {
-        slidesText.push(extractTextFromXML(content));
-      } else {
-        slidesText.push(["(Empty Slide)"]);
+        texts = extractTextFromXML(content);
       }
+
+      // 2. Image Extraction (Only if Vision mode is enabled)
+      const images: string[] = [];
+      if (mode === 'Vision') {
+          // Find relationships file for this slide
+          // e.g. ppt/slides/slide1.xml -> ppt/slides/_rels/slide1.xml.rels
+          const slideName = fileName.split('/').pop(); // slide1.xml
+          const relsPath = `ppt/slides/_rels/${slideName}.rels`;
+          const relsFile = zipped.file(relsPath);
+
+          if (relsFile) {
+              const relsXml = await relsFile.async('string');
+              const relsDoc = parser.parseFromString(relsXml, "application/xml");
+              const relationships = relsDoc.getElementsByTagName("Relationship");
+
+              for (let i = 0; i < relationships.length; i++) {
+                  const type = relationships[i].getAttribute("Type");
+                  const target = relationships[i].getAttribute("Target");
+                  
+                  // Check if relationship is an image
+                  if (type && type.includes("/image") && target) {
+                      // Resolve path. Targets are usually like "../media/image1.png"
+                      let imagePath = target;
+                      if (imagePath.startsWith('../')) {
+                          imagePath = 'ppt' + imagePath.substring(2);
+                      } else {
+                          // Sometimes it's absolute or relative to ppt/slides
+                          imagePath = 'ppt/slides/' + imagePath;
+                      }
+
+                      // Try to find the file
+                      const imgFile = zipped.file(imagePath);
+                      if (imgFile) {
+                          const imgBuffer = await imgFile.async('arraybuffer');
+                          const base64 = arrayBufferToBase64(imgBuffer);
+                          const mime = getMimeType(imagePath);
+                          // For simplicity in the app, we store as full data URI
+                          images.push(`data:${mime};base64,${base64}`);
+                      }
+                  }
+              }
+          }
+      }
+
+      slidesData.push({ text: texts, images });
     }
 
-    return slidesText;
+    return slidesData;
   } catch (error) {
     console.error("Failed to parse PPTX:", error);
     throw new Error("Invalid PPTX file or encrypted.");

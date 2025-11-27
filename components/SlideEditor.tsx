@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { SlideData } from '../types';
-import { Edit3, RefreshCw, Wand2, MonitorPlay } from 'lucide-react';
+import { Edit3, RefreshCw, Wand2, MonitorPlay, ImageIcon } from 'lucide-react';
 
 interface SlideEditorProps {
   slide: SlideData;
@@ -66,19 +66,40 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
         <div className="w-1/3 border-r border-slate-800 p-6 overflow-y-auto bg-slate-900/30">
           <div className="flex items-center gap-2 mb-4 text-slate-400 uppercase text-xs font-bold tracking-wider">
             <MonitorPlay className="w-4 h-4" />
-            <span>Extracted Content</span>
+            <span>Analyzed Content</span>
           </div>
           
-          <div className="space-y-3">
-            {slide.originalText.length === 0 ? (
-               <p className="text-slate-600 italic text-sm">No text detected on this slide.</p>
-            ) : (
-              slide.originalText.map((text, idx) => (
-                <div key={idx} className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50">
-                  <p className="text-slate-300 text-sm leading-relaxed">{text}</p>
-                </div>
-              ))
+          <div className="space-y-6">
+            {/* Visual Content Section */}
+            {slide.images.length > 0 && (
+              <div className="space-y-2">
+                 <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold">
+                   <ImageIcon className="w-3 h-3" />
+                   <span>Extracted Visuals</span>
+                 </div>
+                 <div className="grid grid-cols-1 gap-2">
+                   {slide.images.map((img, idx) => (
+                     <div key={idx} className="rounded-lg overflow-hidden border border-slate-700/50 bg-slate-800/50">
+                        <img src={img} alt={`Slide Visual ${idx}`} className="w-full h-auto object-cover opacity-90 hover:opacity-100 transition-opacity" />
+                     </div>
+                   ))}
+                 </div>
+              </div>
             )}
+
+            {/* Text Content Section */}
+            <div className="space-y-3">
+               <div className="text-slate-500 text-xs font-semibold">Text Data</div>
+               {slide.originalText.length === 0 ? (
+                 <p className="text-slate-600 italic text-sm">No extracted text.</p>
+               ) : (
+                slide.originalText.map((text, idx) => (
+                  <div key={idx} className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50">
+                    <p className="text-slate-300 text-sm leading-relaxed">{text}</p>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
 

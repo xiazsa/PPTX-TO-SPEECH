@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { AppState, SlideData, TargetLanguage, ScriptStyle } from './types';
+import { AppState, SlideData, TargetLanguage, ScriptStyle, ProcessingMode } from './types';
 import { UploadZone } from './components/UploadZone';
 import { SlideEditor } from './components/SlideEditor';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { parsePPTXFile, embedScriptsAndExportPPTX } from './utils/pptxHelper';
+import { convertPdfToImages } from './utils/pdfHelper';
 import { initializeGemini, generateSlideScript } from './services/geminiService';
 import { 
   FileText, 
@@ -11,7 +12,9 @@ import {
   ChevronLeft, 
   CheckCircle2, 
   Bot,
-  FileDown
+  FileDown,
+  Eye,
+  ScanText
 } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -28,6 +31,7 @@ const App: React.FC = () => {
   const [targetLanguage, setTargetLanguage] = useState<TargetLanguage>('Chinese');
   const [scriptStyle, setScriptStyle] = useState<ScriptStyle>('Professional');
   const [customPrompt, setCustomPrompt] = useState<string>('');
+  const [processingMode, setProcessingMode] = useState<ProcessingMode>('Text');
 
   // Check for env key
   useEffect(() => {
@@ -42,20 +46,52 @@ const App: React.FC = () => {
     initializeGemini(key);
   };
 
-  const handleFileSelect = async (file: File) => {
+  const handleFilesSelect = async (pptxFile: File, pdfFile?: File) => {
     try {
       setIsProcessing(true);
-      setOriginalFile(file);
-      setFileName(file.name);
-      const extractedTexts = await parsePPTXFile(file);
+      setOriginalFile(pptxFile);
+      setFileName(pptxFile.name);
       
-      const newSlides: SlideData[] = extractedTexts.map((texts, index) => ({
-        id: index,
-        originalText: texts,
-        generatedScript: "",
-        isGenerating: false,
-        status: 'pending'
-      }));
+      // 1. Parse PPTX Structure (Always needed for text extraction + writing back)
+      const extractedSlides = await parsePPTXFile(pptxFile, processingMode);
+      
+      // 2. If Vision Mode & PDF provided, parse PDF Images
+      let pdfImages: string[] = [];
+      if (processingMode === 'Vision' && pdfFile) {
+         try {
+           pdfImages = await convertPdfToImages(pdfFile);
+         } catch (e) {
+           console.error("PDF Parsing failed:", e);
+           alert("Failed to parse PDF file. Falling back to text-only mode.");
+         }
+      }
+
+      // 3. Merge Data
+      const newSlides: SlideData[] = extractedSlides.map((slide, index) => {
+        // If we have a PDF image for this slide index, use it.
+        // PDF pages are 0-indexed in our array, slide index is same.
+        // Verification: If PDF has fewer pages than PPTX, last slides get no image.
+        // If PDF has more, we ignore extra.
+        const visionImage = pdfImages[index] ? [pdfImages[index]] : [];
+        
+        // Prioritize PDF image over embedded extracted images if available
+        const finalImages = visionImage.length > 0 ? visionImage : slide.images;
+
+        return {
+          id: index,
+          originalText: slide.text,
+          images: finalImages,
+          generatedScript: "",
+          isGenerating: false,
+          status: 'pending'
+        };
+      });
+      
+      // Simple validation warning
+      if (processingMode === 'Vision' && pdfImages.length !== extractedSlides.length) {
+        console.warn(`Mismatch: PPT has ${extractedSlides.length} slides, PDF has ${pdfImages.length} pages.`);
+        // We proceed anyway, assuming 1:1 mapping as much as possible
+      }
 
       setSlides(newSlides);
       setAppState(AppState.EDITOR);
@@ -64,7 +100,7 @@ const App: React.FC = () => {
       generateAllScripts(newSlides);
 
     } catch (error) {
-      alert("Error parsing file. Ensure it is a valid .pptx");
+      alert("Error processing files. Ensure they are valid.");
       console.error(error);
     } finally {
       setIsProcessing(false);
@@ -73,54 +109,47 @@ const App: React.FC = () => {
 
   const generateAllScripts = async (currentSlides: SlideData[]) => {
     const queue = [...currentSlides];
-    
-    // We need to keep track of the *last generated script* to pass as context
     let previousScriptContext: string | null = null;
 
-    // Process one by one to maintain sequential context flow
     for (let i = 0; i < queue.length; i++) {
       const slide = queue[i];
       const nextSlide = queue[i + 1];
 
-      // Update status to generating
       setSlides(prev => prev.map(s => s.id === slide.id ? { ...s, isGenerating: true, status: 'generating' } : s));
 
       try {
         const script = await generateSlideScript(
           slide.id, 
           queue.length,
-          slide.originalText, 
-          previousScriptContext, // Pass the script from i-1
-          nextSlide ? nextSlide.originalText : null, // Peek at i+1 text
+          slide.originalText,
+          slide.images, 
+          previousScriptContext, 
+          nextSlide ? nextSlide.originalText : null, 
           targetLanguage,
           scriptStyle,
           customPrompt
         );
         
-        // Update state
         setSlides(prev => prev.map(s => 
           s.id === slide.id 
             ? { ...s, generatedScript: script, isGenerating: false, status: 'completed' } 
             : s
         ));
 
-        // Store this script to be the "Previous Script" for the next iteration
         previousScriptContext = script;
 
       } catch (error) {
-        // Extract error message to display in the editor
         const errMsg = error instanceof Error ? error.message : "Unknown error";
         setSlides(prev => prev.map(s => 
           s.id === slide.id 
             ? { ...s, generatedScript: `[Generation Error]: ${errMsg}\n\nPlease try regenerating.`, isGenerating: false, status: 'error' } 
             : s
         ));
-        // If error, we pass null context to next slide or maybe a placeholder
         previousScriptContext = null; 
       }
       
-      // Delay to avoid rate limits
-      await new Promise(r => setTimeout(r, 1000));
+      const delay = processingMode === 'Vision' ? 3000 : 1000;
+      await new Promise(r => setTimeout(r, delay));
     }
   };
 
@@ -129,8 +158,6 @@ const App: React.FC = () => {
     if (slideIndex === -1) return;
 
     const slide = slides[slideIndex];
-    
-    // Get context from current state (allows user to edit previous slide manually and then regenerate this one to match)
     const previousSlide = slides[slideIndex - 1];
     const nextSlide = slides[slideIndex + 1];
     const previousScriptContext = previousSlide ? previousSlide.generatedScript : null;
@@ -141,6 +168,7 @@ const App: React.FC = () => {
         slide.id,
         slides.length,
         slide.originalText,
+        slide.images,
         previousScriptContext,
         nextSlide ? nextSlide.originalText : null,
         targetLanguage,
@@ -161,7 +189,6 @@ const App: React.FC = () => {
 
   const exportPPTX = async () => {
     if (!originalFile) return;
-    
     try {
       setIsExporting(true);
       const blob = await embedScriptsAndExportPPTX(originalFile, slides, targetLanguage);
@@ -221,6 +248,10 @@ ${s.generatedScript}
         {appState === AppState.EDITOR && (
           <div className="flex items-center gap-4">
              <span className="text-sm text-slate-500 font-medium hidden md:inline">{fileName}</span>
+             <div className="flex items-center gap-2 px-3 py-1 bg-slate-800 rounded-full border border-slate-700">
+                {processingMode === 'Vision' ? <Eye className="w-3 h-3 text-purple-400" /> : <ScanText className="w-3 h-3 text-blue-400" />}
+                <span className="text-xs text-slate-300">{processingMode} Mode</span>
+             </div>
              
              <div className="flex gap-2">
                 <button 
@@ -254,17 +285,21 @@ ${s.generatedScript}
                <div className="text-center space-y-4">
                   <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
                   <h3 className="text-xl font-medium text-white">Analyzing Presentation Structure...</h3>
-                  <p className="text-slate-400">Reading slide content to generate {targetLanguage} scripts ({scriptStyle})</p>
+                  <p className="text-slate-400">
+                     Extracting content ({processingMode === 'Vision' ? 'Rendering PDF Slides...' : 'Parsing XML Text...'})
+                  </p>
                </div>
              ) : (
                <UploadZone 
-                  onFileSelect={handleFileSelect} 
+                  onFilesSelect={handleFilesSelect} 
                   selectedLanguage={targetLanguage}
                   onLanguageChange={setTargetLanguage}
                   selectedStyle={scriptStyle}
                   onStyleChange={setScriptStyle}
                   customPrompt={customPrompt}
                   onCustomPromptChange={setCustomPrompt}
+                  processingMode={processingMode}
+                  onProcessingModeChange={setProcessingMode}
                />
              )}
           </div>
@@ -298,12 +333,13 @@ ${s.generatedScript}
                     </div>
                     <div className="h-1 w-full bg-slate-700 rounded-full overflow-hidden">
                        <div 
-                         className={`h-full ${slide.originalText.length > 0 ? 'bg-slate-500' : 'bg-red-900/50'}`}
+                         className={`h-full ${slide.originalText.length > 0 || slide.images.length > 0 ? 'bg-slate-500' : 'bg-red-900/50'}`}
                          style={{ width: '40%' }} 
                        />
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-2 truncate">
-                      {slide.originalText[0] || "No Content"}
+                    <p className="text-[10px] text-slate-500 mt-2 truncate flex items-center gap-1">
+                      {slide.images.length > 0 && <Eye className="w-3 h-3 text-purple-400" />}
+                      <span className="truncate">{slide.originalText[0] || (slide.images.length > 0 ? "Visual Content" : "No Content")}</span>
                     </p>
                   </button>
                 ))}
