@@ -24,3 +24,5 @@ export type TargetLanguage = 'English' | 'Chinese' | 'Spanish' | 'French' | 'Ger
 export type ScriptStyle = 'Professional' | 'Conversational' | 'Academic' | 'Enthusiastic' | 'Humorous' | 'Custom';
 
 export type ProcessingMode = 'Text' | 'Vision';
+
+export type UILanguage = 'English' | 'Chinese';

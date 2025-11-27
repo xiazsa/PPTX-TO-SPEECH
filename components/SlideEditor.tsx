@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
-import { SlideData } from '../types';
+import { SlideData, UILanguage } from '../types';
 import { Edit3, RefreshCw, Wand2, MonitorPlay, ImageIcon } from 'lucide-react';
+import { TRANSLATIONS } from '../utils/translations';
 
 interface SlideEditorProps {
   slide: SlideData;
@@ -8,6 +9,7 @@ interface SlideEditorProps {
   currentSlideIndex: number;
   onScriptChange: (id: number, newScript: string) => void;
   onRegenerate: (id: number) => void;
+  uiLanguage: UILanguage;
 }
 
 export const SlideEditor: React.FC<SlideEditorProps> = ({
@@ -15,9 +17,11 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
   totalSlides,
   currentSlideIndex,
   onScriptChange,
-  onRegenerate
+  onRegenerate,
+  uiLanguage
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const t = TRANSLATIONS[uiLanguage].editor;
 
   // Auto-resize textarea
   useEffect(() => {
@@ -34,9 +38,9 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/80">
         <div className="flex items-center gap-3">
           <div className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded">
-            SLIDE {currentSlideIndex + 1} / {totalSlides}
+            {t.slide.toUpperCase()} {currentSlideIndex + 1} / {totalSlides}
           </div>
-          <h2 className="text-white font-medium">Speaker Notes Editor</h2>
+          <h2 className="text-white font-medium">{t.editorTitle}</h2>
         </div>
         
         <div className="flex gap-2">
@@ -56,7 +60,7 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
             ) : (
               <Wand2 className="w-4 h-4" />
             )}
-            <span>Regenerate AI</span>
+            <span>{t.regenerate}</span>
           </button>
         </div>
       </div>
@@ -66,7 +70,7 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
         <div className="w-1/3 border-r border-slate-800 p-6 overflow-y-auto bg-slate-900/30">
           <div className="flex items-center gap-2 mb-4 text-slate-400 uppercase text-xs font-bold tracking-wider">
             <MonitorPlay className="w-4 h-4" />
-            <span>Analyzed Content</span>
+            <span>{t.analyzedContent}</span>
           </div>
           
           <div className="space-y-6">
@@ -75,7 +79,7 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
               <div className="space-y-2">
                  <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold">
                    <ImageIcon className="w-3 h-3" />
-                   <span>Extracted Visuals</span>
+                   <span>{t.extractedVisuals}</span>
                  </div>
                  <div className="grid grid-cols-1 gap-2">
                    {slide.images.map((img, idx) => (
@@ -89,9 +93,9 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
 
             {/* Text Content Section */}
             <div className="space-y-3">
-               <div className="text-slate-500 text-xs font-semibold">Text Data</div>
+               <div className="text-slate-500 text-xs font-semibold">{t.textData}</div>
                {slide.originalText.length === 0 ? (
-                 <p className="text-slate-600 italic text-sm">No extracted text.</p>
+                 <p className="text-slate-600 italic text-sm">{t.noExtractedText}</p>
                ) : (
                 slide.originalText.map((text, idx) => (
                   <div key={idx} className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50">
@@ -107,7 +111,7 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
         <div className="w-2/3 p-6 overflow-y-auto bg-slate-900/10 relative">
           <div className="flex items-center gap-2 mb-4 text-slate-400 uppercase text-xs font-bold tracking-wider">
             <Edit3 className="w-4 h-4" />
-            <span>Script</span>
+            <span>{t.script}</span>
           </div>
 
           <div className="relative">
@@ -115,7 +119,7 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
               <div className="absolute inset-0 bg-slate-900/10 backdrop-blur-[1px] z-10 flex items-center justify-center">
                  <div className="flex flex-col items-center gap-3">
                     <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                    <span className="text-blue-400 text-sm animate-pulse">Writing script...</span>
+                    <span className="text-blue-400 text-sm animate-pulse">{t.writing}</span>
                  </div>
               </div>
             )}
@@ -124,7 +128,7 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
               ref={textareaRef}
               value={slide.generatedScript}
               onChange={(e) => onScriptChange(slide.id, e.target.value)}
-              placeholder="Waiting for AI generation..."
+              placeholder={t.waiting}
               className="w-full bg-transparent text-lg leading-8 text-white placeholder-slate-600 focus:outline-none resize-none min-h-[400px]"
               spellCheck={false}
             />

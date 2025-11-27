@@ -37,11 +37,26 @@ const getStyleGuidelines = (style: ScriptStyle, customPrompt: string): string =>
   }
 };
 
+const formatImagePart = (base64Uri: string) => {
+    const matches = base64Uri.match(/^data:(.+);base64,(.+)$/);
+    if (matches) {
+        return {
+            inlineData: {
+                mimeType: matches[1],
+                data: matches[2]
+            }
+        };
+    }
+    return null;
+};
+
 export const generateSlideScript = async (
   slideIndex: number,
   totalSlides: number,
   currentSlideContent: string[],
-  currentSlideImages: string[], // Base64 data strings
+  currentSlideImages: string[], // Base64 strings
+  previousSlideImages: string[] | null,
+  nextSlideImages: string[] | null,
   previousScript: string | null,
   nextSlideContent: string[] | null,
   language: TargetLanguage = 'English',
@@ -61,27 +76,25 @@ export const generateSlideScript = async (
     ? cleanContent.join("\n- ").slice(0, 5000)
     : "(No extractable text found. Rely on visual analysis.)";
 
-  // 2. Prepare Contexts
+  // 2. Prepare Text Contexts
   const prevContext = previousScript 
-    ? `PREVIOUSLY SPOKEN (The script you just generated for the previous slide):
+    ? `PREVIOUSLY SPOKEN (Recap for continuity):
 """
-${previousScript.slice(-2000)} 
-"""
-(Instruction: You must smoothly transition from the end of the above text to the current slide.)` 
-    : "This is the OPENING slide. Start with a strong introduction.";
+${previousScript.slice(-1000)} 
+"""` 
+    : "This is the OPENING slide. Start strong.";
 
-  const nextContext = nextSlideContent && nextSlideContent.length > 0
-    ? `NEXT SLIDE PREVIEW (What comes immediately after):
+  const nextTextContext = nextSlideContent && nextSlideContent.length > 0
+    ? `NEXT SLIDE TEXT PREVIEW:
 """
-${nextSlideContent.join(', ').slice(0, 500)}...
-"""
-(Instruction: End this current script by briefly hinting at or leading into this next topic.)`
-    : "This is the FINAL slide. Conclude the presentation effectively.";
+${nextSlideContent.join(', ').slice(0, 300)}...
+"""`
+    : "This is the FINAL slide.";
 
   const styleGuidelines = getStyleGuidelines(style, customPrompt);
 
   const systemInstruction = `
-    You are an expert presentation speechwriter delivering a cohesive, single continuous speech.
+    You are an expert presentation speaker delivering a cohesive, continuous speech.
     
     Current Progress: Slide ${slideIndex + 1} of ${totalSlides}.
     Target Language: ${language}
@@ -89,47 +102,55 @@ ${nextSlideContent.join(', ').slice(0, 500)}...
     
     CONTEXT:
     ${prevContext}
+    ${nextTextContext}
     
     CURRENT SLIDE TEXT DATA:
     - ${textContext}
-    
-    ${nextContext}
 
     GUIDELINES:
     1. STRICTLY write the script in ${language}.
-    2. **FLOW IS CRITICAL**: Do not treat this as an isolated slide. Connect it explicitly to what was just said in the "PREVIOUSLY SPOKEN" block.
-    3. Use transitional phrases (e.g., "Building on that...", "Now let's look at...", "As we saw earlier...").
-    4. If images are provided, analyze them deeply. Describe charts, trends, or visual metaphors visible in the image to make the speech concrete.
+    2. **FLOW IS CRITICAL**: Explicitly connect this slide to the previous one (visuals or text) and foreshadow the next one.
+    3. Use transitional phrases (e.g., "As we saw in the previous chart...", "Moving on to...", "This leads us to...").
+    4. **VISUAL ANALYSIS**: You are provided with images of the Previous (if any), Current, and Next (if any) slides.
+       - Refer to visual elements in the CURRENT slide (charts, photos, diagrams) specifically.
+       - If the Previous slide had a related visual, mention the progression.
     5. **STYLE INSTRUCTION**: ${styleGuidelines}
     6. Length: Approx 150-250 words.
-    7. Return ONLY the raw script text. No titles, no markdown metadata.
+    7. Return ONLY the raw script text.
   `;
 
-  // 3. Construct Payload
+  // 3. Construct Payload with Interleaved Images
   const parts: any[] = [];
   
-  // Add images if available (limit to 3 to avoid payload issues)
-  currentSlideImages.slice(0, 3).forEach(base64Uri => {
-    // base64Uri is "data:image/png;base64,....."
-    const matches = base64Uri.match(/^data:(.+);base64,(.+)$/);
-    if (matches) {
-        parts.push({
-            inlineData: {
-                mimeType: matches[1],
-                data: matches[2]
-            }
-        });
-    }
-  });
+  // A. Previous Slide Context (Visual)
+  if (previousSlideImages && previousSlideImages.length > 0) {
+      parts.push({ text: "CONTEXT - VISUAL FROM PREVIOUS SLIDE (For continuity):" });
+      const imgPart = formatImagePart(previousSlideImages[0]); // Take first image
+      if (imgPart) parts.push(imgPart);
+  }
 
-  // Add text prompt
+  // B. Current Slide Visuals
+  if (currentSlideImages.length > 0) {
+      parts.push({ text: "FOCUS - VISUAL CONTENT OF CURRENT SLIDE (Describe and Analyze this):" });
+      // Limit to 1 main image for current slide to save tokens if heavy, but usually fine
+      const imgPart = formatImagePart(currentSlideImages[0]);
+      if (imgPart) parts.push(imgPart);
+  }
+
+  // C. Next Slide Preview (Visual)
+  if (nextSlideImages && nextSlideImages.length > 0) {
+      parts.push({ text: "PREVIEW - VISUAL FROM NEXT SLIDE (For transition/foreshadowing):" });
+      const imgPart = formatImagePart(nextSlideImages[0]);
+      if (imgPart) parts.push(imgPart);
+  }
+
+  // D. System Instructions
   parts.push({ text: systemInstruction });
 
   try {
-    // 4. Execute with retry logic
     const responseText = await retry(async () => {
       const response = await genAIClient!.models.generateContent({
-        model: 'gemini-2.5-flash', // Supports multimodal
+        model: 'gemini-2.5-flash',
         contents: { parts },
       });
       return response.text;

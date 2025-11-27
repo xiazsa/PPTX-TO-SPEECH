@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { AppState, SlideData, TargetLanguage, ScriptStyle, ProcessingMode } from './types';
+import { AppState, SlideData, TargetLanguage, ScriptStyle, ProcessingMode, UILanguage } from './types';
 import { UploadZone } from './components/UploadZone';
 import { SlideEditor } from './components/SlideEditor';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { parsePPTXFile, embedScriptsAndExportPPTX } from './utils/pptxHelper';
 import { convertPdfToImages } from './utils/pdfHelper';
 import { initializeGemini, generateSlideScript } from './services/geminiService';
+import { TRANSLATIONS } from './utils/translations';
 import { 
   FileText, 
   ChevronRight, 
@@ -14,7 +15,8 @@ import {
   Bot,
   FileDown,
   Eye,
-  ScanText
+  ScanText,
+  Languages
 } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -28,10 +30,14 @@ const App: React.FC = () => {
   const [fileName, setFileName] = useState("");
   
   // Settings State
+  const [uiLanguage, setUiLanguage] = useState<UILanguage>('Chinese');
   const [targetLanguage, setTargetLanguage] = useState<TargetLanguage>('Chinese');
   const [scriptStyle, setScriptStyle] = useState<ScriptStyle>('Professional');
   const [customPrompt, setCustomPrompt] = useState<string>('');
   const [processingMode, setProcessingMode] = useState<ProcessingMode>('Text');
+  const [visionDelay, setVisionDelay] = useState<number>(3); // Default 3s delay
+
+  const t = TRANSLATIONS[uiLanguage];
 
   // Check for env key
   useEffect(() => {
@@ -52,10 +58,8 @@ const App: React.FC = () => {
       setOriginalFile(pptxFile);
       setFileName(pptxFile.name);
       
-      // 1. Parse PPTX Structure (Always needed for text extraction + writing back)
       const extractedSlides = await parsePPTXFile(pptxFile, processingMode);
       
-      // 2. If Vision Mode & PDF provided, parse PDF Images
       let pdfImages: string[] = [];
       if (processingMode === 'Vision' && pdfFile) {
          try {
@@ -66,15 +70,8 @@ const App: React.FC = () => {
          }
       }
 
-      // 3. Merge Data
       const newSlides: SlideData[] = extractedSlides.map((slide, index) => {
-        // If we have a PDF image for this slide index, use it.
-        // PDF pages are 0-indexed in our array, slide index is same.
-        // Verification: If PDF has fewer pages than PPTX, last slides get no image.
-        // If PDF has more, we ignore extra.
         const visionImage = pdfImages[index] ? [pdfImages[index]] : [];
-        
-        // Prioritize PDF image over embedded extracted images if available
         const finalImages = visionImage.length > 0 ? visionImage : slide.images;
 
         return {
@@ -87,16 +84,13 @@ const App: React.FC = () => {
         };
       });
       
-      // Simple validation warning
       if (processingMode === 'Vision' && pdfImages.length !== extractedSlides.length) {
         console.warn(`Mismatch: PPT has ${extractedSlides.length} slides, PDF has ${pdfImages.length} pages.`);
-        // We proceed anyway, assuming 1:1 mapping as much as possible
       }
 
       setSlides(newSlides);
       setAppState(AppState.EDITOR);
       
-      // Start batch generation
       generateAllScripts(newSlides);
 
     } catch (error) {
@@ -113,7 +107,8 @@ const App: React.FC = () => {
 
     for (let i = 0; i < queue.length; i++) {
       const slide = queue[i];
-      const nextSlide = queue[i + 1];
+      const prevSlide = queue[i - 1]; // Can be undefined
+      const nextSlide = queue[i + 1]; // Can be undefined
 
       setSlides(prev => prev.map(s => s.id === slide.id ? { ...s, isGenerating: true, status: 'generating' } : s));
 
@@ -122,7 +117,9 @@ const App: React.FC = () => {
           slide.id, 
           queue.length,
           slide.originalText,
-          slide.images, 
+          slide.images,
+          prevSlide ? prevSlide.images : null, // Pass previous images
+          nextSlide ? nextSlide.images : null, // Pass next images
           previousScriptContext, 
           nextSlide ? nextSlide.originalText : null, 
           targetLanguage,
@@ -148,7 +145,8 @@ const App: React.FC = () => {
         previousScriptContext = null; 
       }
       
-      const delay = processingMode === 'Vision' ? 3000 : 1000;
+      // Use user-defined delay for Vision mode, or fixed short delay for Text mode
+      const delay = processingMode === 'Vision' ? (visionDelay * 1000) : 1000;
       await new Promise(r => setTimeout(r, delay));
     }
   };
@@ -169,6 +167,8 @@ const App: React.FC = () => {
         slides.length,
         slide.originalText,
         slide.images,
+        previousSlide ? previousSlide.images : null, // Context images
+        nextSlide ? nextSlide.images : null,       // Context images
         previousScriptContext,
         nextSlide ? nextSlide.originalText : null,
         targetLanguage,
@@ -228,8 +228,12 @@ ${s.generatedScript}
     URL.revokeObjectURL(url);
   };
 
+  const toggleLanguage = () => {
+    setUiLanguage(prev => prev === 'English' ? 'Chinese' : 'English');
+  };
+
   if (!apiKey) {
-    return <ApiKeyModal onSubmit={handleApiKeySubmit} />;
+    return <ApiKeyModal onSubmit={handleApiKeySubmit} uiLanguage={uiLanguage} />;
   }
 
   return (
@@ -241,40 +245,50 @@ ${s.generatedScript}
             <Bot className="text-white w-5 h-5" />
           </div>
           <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-400">
-            AutoScript AI
+            {t.appTitle}
           </h1>
         </div>
         
-        {appState === AppState.EDITOR && (
-          <div className="flex items-center gap-4">
-             <span className="text-sm text-slate-500 font-medium hidden md:inline">{fileName}</span>
-             <div className="flex items-center gap-2 px-3 py-1 bg-slate-800 rounded-full border border-slate-700">
-                {processingMode === 'Vision' ? <Eye className="w-3 h-3 text-purple-400" /> : <ScanText className="w-3 h-3 text-blue-400" />}
-                <span className="text-xs text-slate-300">{processingMode} Mode</span>
-             </div>
-             
-             <div className="flex gap-2">
-                <button 
-                  onClick={downloadTextScripts}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium px-4 py-2 rounded-lg flex items-center gap-2 transition-all border border-slate-700"
-                  title="Download raw text file"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span className="hidden sm:inline">Text Only</span>
-                </button>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={toggleLanguage}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors border border-slate-700 text-sm font-medium"
+          >
+            <Languages className="w-4 h-4" />
+            <span>{uiLanguage === 'English' ? '中文' : 'EN'}</span>
+          </button>
 
-                <button 
-                  onClick={exportPPTX}
-                  disabled={isExporting}
-                  className="bg-green-600 hover:bg-green-500 text-white text-sm font-medium px-4 py-2 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-green-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Download new PPTX with notes"
-                >
-                  {isExporting ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <FileDown className="w-4 h-4" />}
-                  <span>Export PPTX</span>
-                </button>
-             </div>
-          </div>
-        )}
+          {appState === AppState.EDITOR && (
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-slate-500 font-medium hidden md:inline border-l border-slate-700 pl-4">{fileName}</span>
+              <div className="flex items-center gap-2 px-3 py-1 bg-slate-800 rounded-full border border-slate-700">
+                  {processingMode === 'Vision' ? <Eye className="w-3 h-3 text-purple-400" /> : <ScanText className="w-3 h-3 text-blue-400" />}
+                  <span className="text-xs text-slate-300">{processingMode} {t.header.mode}</span>
+              </div>
+              
+              <div className="flex gap-2">
+                  <button 
+                    onClick={downloadTextScripts}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium px-4 py-2 rounded-lg flex items-center gap-2 transition-all border border-slate-700"
+                    title="Download raw text file"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span className="hidden sm:inline">{t.header.textOnly}</span>
+                  </button>
+
+                  <button 
+                    onClick={exportPPTX}
+                    disabled={isExporting}
+                    className="bg-green-600 hover:bg-green-500 text-white text-sm font-medium px-4 py-2 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-green-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Download new PPTX with notes"
+                  >
+                    {isExporting ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <FileDown className="w-4 h-4" />}
+                    <span>{t.header.exportPPTX}</span>
+                  </button>
+              </div>
+            </div>
+          )}
+        </div>
       </header>
 
       {/* Main Content */}
@@ -284,9 +298,9 @@ ${s.generatedScript}
              {isProcessing ? (
                <div className="text-center space-y-4">
                   <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                  <h3 className="text-xl font-medium text-white">Analyzing Presentation Structure...</h3>
+                  <h3 className="text-xl font-medium text-white">{t.processing.analyzing}</h3>
                   <p className="text-slate-400">
-                     Extracting content ({processingMode === 'Vision' ? 'Rendering PDF Slides...' : 'Parsing XML Text...'})
+                     {t.processing.extracting} ({processingMode === 'Vision' ? t.processing.rendering : t.processing.parsing})
                   </p>
                </div>
              ) : (
@@ -300,6 +314,9 @@ ${s.generatedScript}
                   onCustomPromptChange={setCustomPrompt}
                   processingMode={processingMode}
                   onProcessingModeChange={setProcessingMode}
+                  visionDelay={visionDelay}
+                  onVisionDelayChange={setVisionDelay}
+                  uiLanguage={uiLanguage}
                />
              )}
           </div>
@@ -308,7 +325,7 @@ ${s.generatedScript}
             {/* Sidebar: Slide List */}
             <div className="w-64 flex flex-col bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shrink-0">
               <div className="p-4 border-b border-slate-800 bg-slate-950/50">
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Slides Overview</h3>
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.editor.slidesOverview}</h3>
               </div>
               <div className="flex-1 overflow-y-auto p-3 space-y-2">
                 {slides.map((slide, idx) => (
@@ -325,7 +342,7 @@ ${s.generatedScript}
                   >
                     <div className="flex justify-between items-center mb-1">
                       <span className={`text-xs font-bold ${currentSlideIndex === idx ? 'text-blue-400' : 'text-slate-400'}`}>
-                        Slide {idx + 1}
+                        {t.editor.slide} {idx + 1}
                       </span>
                       {slide.status === 'completed' && <CheckCircle2 className="w-3 h-3 text-green-500" />}
                       {slide.status === 'error' && <div className="w-2 h-2 bg-red-500 rounded-full" />}
@@ -339,7 +356,7 @@ ${s.generatedScript}
                     </div>
                     <p className="text-[10px] text-slate-500 mt-2 truncate flex items-center gap-1">
                       {slide.images.length > 0 && <Eye className="w-3 h-3 text-purple-400" />}
-                      <span className="truncate">{slide.originalText[0] || (slide.images.length > 0 ? "Visual Content" : "No Content")}</span>
+                      <span className="truncate">{slide.originalText[0] || (slide.images.length > 0 ? t.editor.visualContent : t.editor.noContent)}</span>
                     </p>
                   </button>
                 ))}
@@ -355,6 +372,7 @@ ${s.generatedScript}
                     currentSlideIndex={currentSlideIndex}
                     onScriptChange={handleScriptChange}
                     onRegenerate={handleRegenerate}
+                    uiLanguage={uiLanguage}
                  />
               </div>
 
@@ -366,7 +384,7 @@ ${s.generatedScript}
                   className="flex items-center gap-2 text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition-colors"
                 >
                   <ChevronLeft className="w-5 h-5" />
-                  <span>Previous Slide</span>
+                  <span>{t.editor.prevSlide}</span>
                 </button>
 
                 <div className="flex gap-1">
@@ -386,7 +404,7 @@ ${s.generatedScript}
                   disabled={currentSlideIndex === slides.length - 1}
                   className="flex items-center gap-2 text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition-colors"
                 >
-                  <span>Next Slide</span>
+                  <span>{t.editor.nextSlide}</span>
                   <ChevronRight className="w-5 h-5" />
                 </button>
               </div>

@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
-import { UploadCloud, FileType, AlertCircle, Globe, Mic2, Sparkles, Settings2, ScanText, Eye, CheckCircle2, FileText, Presentation } from 'lucide-react';
-import { TargetLanguage, ScriptStyle, ProcessingMode } from '../types';
+import { UploadCloud, AlertCircle, Globe, Mic2, Sparkles, Settings2, ScanText, Eye, CheckCircle2, FileText, Presentation, Timer } from 'lucide-react';
+import { TargetLanguage, ScriptStyle, ProcessingMode, UILanguage } from '../types';
+import { TRANSLATIONS } from '../utils/translations';
 
 interface UploadZoneProps {
   onFilesSelect: (pptxFile: File, pdfFile?: File) => void;
@@ -12,6 +13,9 @@ interface UploadZoneProps {
   onCustomPromptChange: (text: string) => void;
   processingMode: ProcessingMode;
   onProcessingModeChange: (mode: ProcessingMode) => void;
+  visionDelay: number;
+  onVisionDelayChange: (seconds: number) => void;
+  uiLanguage: UILanguage;
 }
 
 const LANGUAGES: TargetLanguage[] = [
@@ -24,14 +28,9 @@ const LANGUAGES: TargetLanguage[] = [
   'Korean'
 ];
 
-const STYLES: { value: ScriptStyle; label: string; desc: string }[] = [
-  { value: 'Professional', label: 'Professional', desc: 'Formal, concise, corporate tone' },
-  { value: 'Conversational', label: 'Conversational', desc: 'Relaxed, engaging, spoken-word style' },
-  { value: 'Academic', label: 'Academic', desc: 'Detailed, educational, formal vocabulary' },
-  { value: 'Enthusiastic', label: 'Enthusiastic', desc: 'High energy, motivational, persuasive' },
-  { value: 'Humorous', label: 'Humorous', desc: 'Light-hearted, witty, occasional jokes' },
-  { value: 'Custom', label: 'Custom', desc: 'Define your own specific requirements' },
-];
+const STYLE_OPTIONS = [
+    'Professional', 'Conversational', 'Academic', 'Enthusiastic', 'Humorous', 'Custom'
+] as const;
 
 export const UploadZone: React.FC<UploadZoneProps> = ({ 
   onFilesSelect, 
@@ -42,11 +41,16 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
   customPrompt,
   onCustomPromptChange,
   processingMode,
-  onProcessingModeChange
+  onProcessingModeChange,
+  visionDelay,
+  onVisionDelayChange,
+  uiLanguage
 }) => {
   const [pptxFile, setPptxFile] = useState<File | null>(null);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const t = TRANSLATIONS[uiLanguage].uploadZone;
 
   // --- Handlers for Text Mode (Single PPTX) ---
   const handlePptxDrop = useCallback((e: React.DragEvent) => {
@@ -54,7 +58,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const file = e.dataTransfer.files[0];
       if (!file.name.endsWith('.pptx')) {
-        setError("Please upload a .pptx file.");
+        setError(t.errorPPTX);
         return;
       }
       setError(null);
@@ -65,13 +69,13 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
         setPptxFile(file);
       }
     }
-  }, [processingMode, onFilesSelect]);
+  }, [processingMode, onFilesSelect, t]);
 
   const handlePptxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
       if (!file.name.endsWith('.pptx')) {
-        setError("Please upload a .pptx file.");
+        setError(t.errorPPTX);
         return;
       }
       setError(null);
@@ -90,19 +94,19 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const file = e.dataTransfer.files[0];
       if (!file.name.toLowerCase().endsWith('.pdf')) {
-        setError("Please upload a .pdf file.");
+        setError(t.errorPDF);
         return;
       }
       setError(null);
       setPdfFile(file);
     }
-  }, []);
+  }, [t]);
 
   const handlePdfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
       if (!file.name.toLowerCase().endsWith('.pdf')) {
-        setError("Please upload a .pdf file.");
+        setError(t.errorPDF);
         return;
       }
       setError(null);
@@ -112,7 +116,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
 
   const handleStartVisionAnalysis = () => {
     if (!pptxFile || !pdfFile) {
-      setError("Both PPTX and PDF files are required for Vision Mode.");
+      setError(t.errorBoth);
       return;
     }
     onFilesSelect(pptxFile, pdfFile);
@@ -125,12 +129,12 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
       <div className="w-full max-w-2xl bg-slate-900/50 backdrop-blur-md rounded-2xl border border-slate-800 p-6 mb-8 shadow-xl">
         <div className="flex items-center gap-2 mb-6 border-b border-slate-800 pb-4">
           <Settings2 className="w-5 h-5 text-blue-400" />
-          <h2 className="text-lg font-semibold text-white">Generation Settings</h2>
+          <h2 className="text-lg font-semibold text-white">{t.settingsTitle}</h2>
         </div>
 
         {/* Processing Mode Switch */}
         <div className="mb-6 p-4 bg-slate-800/50 rounded-xl border border-slate-700/50">
-           <label className="text-sm text-slate-400 font-medium mb-3 block">Analysis Mode</label>
+           <label className="text-sm text-slate-400 font-medium mb-3 block">{t.analysisMode}</label>
            <div className="flex gap-4">
               <button 
                 onClick={() => {
@@ -147,7 +151,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
               >
                  <ScanText className="w-4 h-4" />
                  <div className="text-left">
-                    <div className="text-sm font-semibold">Standard Text</div>
+                    <div className="text-sm font-semibold">{t.modeText}</div>
                  </div>
               </button>
 
@@ -166,14 +170,35 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
               >
                  <Eye className="w-4 h-4" />
                  <div className="text-left">
-                    <div className="text-sm font-semibold">Vision (PPT + PDF)</div>
+                    <div className="text-sm font-semibold">{t.modeVision}</div>
                  </div>
               </button>
            </div>
+           
+           {/* Vision Mode Specific Settings */}
+           {processingMode === 'Vision' && (
+             <div className="mt-4 pt-4 border-t border-slate-700/50">
+                <label className="text-xs text-slate-400 font-medium flex items-center gap-2 mb-2">
+                   <Timer className="w-3 h-3 text-purple-400" />
+                   {t.visionDelay}
+                </label>
+                <div className="flex items-center gap-4">
+                  <input 
+                    type="range" 
+                    min="1" 
+                    max="10" 
+                    value={visionDelay} 
+                    onChange={(e) => onVisionDelayChange(Number(e.target.value))}
+                    className="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                  />
+                  <span className="text-sm font-mono text-purple-300 w-12 text-right">{visionDelay}s</span>
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1">{t.visionHint}</p>
+             </div>
+           )}
+
            <p className="text-xs text-slate-500 mt-2 ml-1">
-             {processingMode === 'Text' 
-                ? "Fast. Extracts text from PPTX XML. Best for standard text-heavy slides." 
-                : "Advanced. Requires both PPTX (to edit) and PDF (to see). Analyzing slide screenshots gives the best AI understanding."}
+             {processingMode === 'Text' ? t.modeDescText : t.modeDescVision}
            </p>
         </div>
 
@@ -182,7 +207,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
           <div className="space-y-2">
             <label className="text-sm text-slate-400 font-medium flex items-center gap-2">
               <Globe className="w-4 h-4" />
-              Target Language
+              {t.targetLang}
             </label>
             <div className="relative w-full">
               <select 
@@ -201,7 +226,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
           <div className="space-y-2">
             <label className="text-sm text-slate-400 font-medium flex items-center gap-2">
               <Mic2 className="w-4 h-4" />
-              Speaking Style
+              {t.style}
             </label>
             <div className="relative w-full">
               <select 
@@ -209,9 +234,9 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
                 onChange={(e) => onStyleChange(e.target.value as ScriptStyle)}
                 className="w-full appearance-none bg-slate-800 border border-slate-700 hover:border-blue-500 rounded-lg py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
               >
-                {STYLES.map(style => (
-                  <option key={style.value} value={style.value}>
-                    {style.label}
+                {STYLE_OPTIONS.map(style => (
+                  <option key={style} value={style}>
+                    {style}
                   </option>
                 ))}
               </select>
@@ -221,9 +246,9 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
         
         {/* Style Hint */}
         <div className="mt-3 text-xs text-slate-500 flex items-center justify-between">
-           <span>{STYLES.find(s => s.value === selectedStyle)?.desc}</span>
+           <span>{t.styleDesc[selectedStyle]}</span>
            {selectedStyle === 'Custom' && (
-             <span className="text-blue-400 font-medium">Advanced</span>
+             <span className="text-blue-400 font-medium">{t.advanced}</span>
            )}
         </div>
 
@@ -234,12 +259,12 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
         `}>
           <label className="text-sm text-slate-400 font-medium flex items-center gap-2 mb-2">
             <Sparkles className="w-4 h-4 text-yellow-500" />
-            Custom Instructions
+            {t.customInst}
           </label>
           <textarea 
             value={customPrompt}
             onChange={(e) => onCustomPromptChange(e.target.value)}
-            placeholder="e.g., 'Make it sound like a Steve Jobs keynote', 'Focus heavily on the financial data'..."
+            placeholder={t.customPlaceholder}
             className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm h-24 resize-none"
           />
         </div>
@@ -257,8 +282,8 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
           <div className="p-5 rounded-full bg-slate-800 mb-4 group-hover:scale-110 transition-transform shadow-xl">
             <UploadCloud className="w-10 h-10 text-blue-400" />
           </div>
-          <h3 className="text-xl font-semibold text-white mb-2">Upload PowerPoint (.pptx)</h3>
-          <p className="text-slate-400 text-sm">Drag & drop or click to upload</p>
+          <h3 className="text-xl font-semibold text-white mb-2">{t.dropPPTX}</h3>
+          <p className="text-slate-400 text-sm">{t.dropHint}</p>
         </div>
       ) : (
         /* Vision Mode Dual Upload */
@@ -278,11 +303,11 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
                   {pptxFile ? <CheckCircle2 className="w-6 h-6 text-white" /> : <Presentation className="w-5 h-5 text-slate-400" />}
                </div>
                <div>
-                 <h4 className="text-white font-medium">Step 1: Structure</h4>
-                 <p className="text-xs text-slate-400">{pptxFile ? pptxFile.name : "Upload the .pptx file"}</p>
+                 <h4 className="text-white font-medium">{t.step1}</h4>
+                 <p className="text-xs text-slate-400">{pptxFile ? pptxFile.name : t.step1Desc}</p>
                </div>
              </div>
-             {pptxFile && <button className="text-xs text-green-400 font-medium z-20" onClick={(e) => {e.stopPropagation(); setPptxFile(null);}}>Change</button>}
+             {pptxFile && <button className="text-xs text-green-400 font-medium z-20" onClick={(e) => {e.stopPropagation(); setPptxFile(null);}}>{t.change}</button>}
           </div>
 
           {/* Step 2: PDF */}
@@ -299,11 +324,11 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
                   {pdfFile ? <CheckCircle2 className="w-6 h-6 text-white" /> : <FileText className="w-5 h-5 text-slate-400" />}
                </div>
                <div>
-                 <h4 className="text-white font-medium">Step 2: Visuals</h4>
-                 <p className="text-xs text-slate-400">{pdfFile ? pdfFile.name : "Upload PDF export of slides"}</p>
+                 <h4 className="text-white font-medium">{t.step2}</h4>
+                 <p className="text-xs text-slate-400">{pdfFile ? pdfFile.name : t.step2Desc}</p>
                </div>
              </div>
-             {pdfFile && <button className="text-xs text-purple-400 font-medium z-20" onClick={(e) => {e.stopPropagation(); setPdfFile(null);}}>Change</button>}
+             {pdfFile && <button className="text-xs text-purple-400 font-medium z-20" onClick={(e) => {e.stopPropagation(); setPdfFile(null);}}>{t.change}</button>}
           </div>
 
           {/* Action Button */}
@@ -319,7 +344,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
              `}
           >
             <Sparkles className="w-5 h-5" />
-            Start Vision Analysis
+            {t.startVision}
           </button>
         </div>
       )}

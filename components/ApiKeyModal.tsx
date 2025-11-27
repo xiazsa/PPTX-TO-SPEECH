@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 import { Key, Lock } from 'lucide-react';
+import { UILanguage } from '../types';
+import { TRANSLATIONS } from '../utils/translations';
 
 interface ApiKeyModalProps {
   onSubmit: (key: string) => void;
+  uiLanguage?: UILanguage;
 }
 
-export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ onSubmit }) => {
+export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ onSubmit, uiLanguage = 'Chinese' }) => {
   const [key, setKey] = useState('');
+  const t = TRANSLATIONS[uiLanguage].apiKeyModal;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,11 +27,10 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ onSubmit }) => {
         </div>
         
         <h2 className="text-2xl font-bold text-center text-white mb-2">
-          Enter Gemini API Key
+          {t.title}
         </h2>
         <p className="text-slate-400 text-center mb-8 text-sm">
-          To generate scripts, this app requires a Google Gemini API key. 
-          Your key is used locally and never stored on our servers.
+          {t.desc}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -37,7 +40,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ onSubmit }) => {
               type="password"
               value={key}
               onChange={(e) => setKey(e.target.value)}
-              placeholder="AIzaSy..."
+              placeholder={t.placeholder}
               className="w-full bg-slate-800 border border-slate-700 rounded-lg py-3 pl-10 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder-slate-600"
               required
             />
@@ -47,7 +50,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ onSubmit }) => {
             type="submit"
             className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium py-3 rounded-lg transition-all shadow-lg shadow-blue-500/20"
           >
-            Start Session
+            {t.submit}
           </button>
         </form>
         
@@ -58,7 +61,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ onSubmit }) => {
             rel="noopener noreferrer"
             className="text-xs text-blue-400 hover:text-blue-300 underline"
           >
-            Get an API Key
+            {t.link}
           </a>
         </div>
       </div>
