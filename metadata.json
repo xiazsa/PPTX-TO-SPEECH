@@ -1,0 +1,5 @@
+{
+  "name": "AutoScript AI - PPTX to Speech",
+  "description": "Intelligent tool that parses PowerPoint files, uses Gemini to generate professional speaker notes for each slide, and allows exporting the scripts.",
+  "requestFramePermissions": []
+}
