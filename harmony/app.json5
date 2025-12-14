@@ -1,0 +1,15 @@
+{
+  "app": {
+    "bundleName": "com.example.pptxspeech",
+    "vendor": "openai",
+    "version": {
+      "code": 1,
+      "name": "1.0.0"
+    },
+    "apiVersion": {
+      "compatible": 12,
+      "target": 12,
+      "releaseType": "Release"
+    }
+  }
+}
