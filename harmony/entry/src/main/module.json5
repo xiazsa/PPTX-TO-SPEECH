@@ -1,0 +1,28 @@
+{
+  "module": {
+    "name": "entry",
+    "type": "entry",
+    "description": "$string:app_name",
+    "deviceTypes": ["phone", "tablet"],
+    "mainAbility": "EntryAbility",
+    "abilities": [
+      {
+        "name": "EntryAbility",
+        "srcEntry": "./ets/entryability/EntryAbility",
+        "description": "$string:app_name",
+        "icon": "$media:icon",
+        "label": "$string:app_name",
+        "startWindowIcon": "$media:icon",
+        "startWindowBackground": "$media:background",
+        "exported": true,
+        "visible": true,
+        "skills": [
+          {
+            "actions": ["action.system.home"],
+            "entities": ["entity.system.home"]
+          }
+        ]
+      }
+    ]
+  }
+}

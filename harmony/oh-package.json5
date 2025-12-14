@@ -1,0 +1,13 @@
+{
+  "name": "pptx-to-speech-harmony",
+  "version": "1.0.0",
+  "app": {
+    "bundleName": "com.example.pptxspeech",
+    "vendor": "openai"
+  },
+  "dependencies": {
+    "@ohos/jszip": "3.10.1",
+    "@ohos/file.fs": "^1.0.0",
+    "@ohos/promptAction": "^1.0.0"
+  }
+}
