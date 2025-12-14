@@ -1,8 +1,8 @@
 import fs from '@ohos.file.fs';
-// Using community JSZip build that ships with Harmony npm compatibility.
+// 使用 Harmony 专用的 JSZip 依赖，避免引用到仓库根目录的 Node 版依赖。
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
-import JSZip from 'jszip';
+import JSZip from '@ohos/jszip';
 
 export interface SlideNotePayload {
   notes: string;
